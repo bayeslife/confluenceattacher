@@ -1,0 +1,29 @@
+{
+  "name": "ConfluencePageAttacher",
+  "version": "1.0.3",
+  "description": "This module publishes a file onto confluence page as an attachment",
+  "main": "public.js",
+  "watch": {
+    "cli": {
+      "patterns": [
+        "src"
+      ],
+      "extensions": "svg"
+    }
+  },
+  "scripts": {
+    "images": "DEBUG=publish node publish.js Test Page1 PageCreated /home/phil/iag/tmp/PageCreate2---Attachment.png ",
+    "cli": "DEBUG=publish-module node publish.js Test Page1 PageCreated /tmp/content/PageCreate2---Communities.png ",
+    "watch": "npm-watch"
+  },
+  "keywords": [],
+  "author": "Phil Tomlinson",
+  "license": "ISC",
+  "devDependencies": {},
+  "dependencies": {
+    "bluebird": "^3.4.0",
+    "debug": "^2.2.0",
+    "pn": "^1.0.0",
+    "svg2png": "^3.0.0"
+  }
+}

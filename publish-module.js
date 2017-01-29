@@ -45,27 +45,52 @@ function queryContainerPage(){
     });
 };
 
-function queryAPIPage(parentPageId){
-  debug("Finding API Page that is child of parent:"+ parentPageId);
-  return new Promise(function(resolve,reject){
-    http.get({
-      url: confluenceurl+"/rest/api/content?title="+pageName,
-      proxy: proxy
-    }, function(err,resp,body){
-      if(err==null){
-        var b = JSON.parse(body);
-        if(b.results.length>0){
-          var pageId = b.results[0].id;
-          debug("Found parent page:"+ pageId);
-          resolve(pageId);
+ function getAPIPage(){
+   debug("Get API Page:");
+   return new Promise(function(resolve,reject){
+     http.get({
+       url: confluenceurl+"/rest/api/content/"+pageName,
+       proxy: proxy
+     }, function(err,resp,body){
+       if(err==null && resp.statusCode!=404){
+          debug("Found API Page:");          
+           var pageId = pageName;
+           resolve(pageId);
+       }else {
+         console.log(err);
+         resolve(null);
+       }
+     });
+   });
+ };
+
+function queryAPIPage(pageId){
+    return new Promise(function(resolve,reject){
+      if(pageId!=null){
+        resolve(pageId);
+      }else {
+        debug("Finding API Page");
+      http.get({
+        //url: confluenceurl+"/rest/api/content?title="+pageName,
+        url: confluenceurl+"/rest/api/content?title="+pageName,
+        proxy: proxy
+      }, function(err,resp,body){
+        if(err==null){
+          var b = JSON.parse(body);
+          if(b.results.length>0){
+            var pageId = b.results[0].id;
+            debug("Found parent page:"+ pageId);
+            resolve(pageId);
+          }else {
+            resolve(null);
+          }
         }else {
           resolve(null);
         }
-      }else {
-        resolve(null);
-      }
-    });
+      });
+    }
   });
+
 };
 
 function createPage(pageId){
@@ -236,7 +261,8 @@ function sync(apiFileNm,cb) {
   pageName = baseName.substring(0,baseName.indexOf('---'));
 
 
-  queryAPIPage()
+  getAPIPage()
+    .then(queryAPIPage)
     .then(queryAttachment)
     .then(createAttachment)
     .then(updateAttachment)

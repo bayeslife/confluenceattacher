@@ -1,6 +1,6 @@
 {
   "name": "ConfluencePageAttacher",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "This module publishes a file onto confluence page as an attachment",
   "main": "public.js",
   "watch": {

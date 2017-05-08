@@ -20,7 +20,8 @@
   "author": "Phil Tomlinson",
   "license": "ISC",
   "devDependencies": {
-    "striptags": "^3.0.1"
+    "striptags": "^3.0.1",
+    "xml2js": "^0.4.17"
   },
   "dependencies": {
     "bluebird": "^3.4.0",

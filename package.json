@@ -19,7 +19,9 @@
   "keywords": [],
   "author": "Phil Tomlinson",
   "license": "ISC",
-  "devDependencies": {},
+  "devDependencies": {
+    "striptags": "^3.0.1"
+  },
   "dependencies": {
     "bluebird": "^3.4.0",
     "debug": "^2.2.0",

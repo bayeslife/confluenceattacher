@@ -6,6 +6,9 @@ var Promise = require("bluebird");
 var http = require('request');
 var fs = require('fs');
 
+var xml2js = require("xml2js");
+var striptags = require('striptags');
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 confluenceurl = process.env.CONFLUENCEURL;
@@ -15,12 +18,14 @@ console.log(process.env.PROXYURL);
 proxy = process.env.PROXYURL;
 //proxy = "http://"+username+":"+password+"@"+proxyHost+":"+proxyPort;
 
-var spaceName=null;
-var parentName=null;
-var pageName=null;
-var apiFileName=null;
+function context(s,pr,pg,fn){
 
-function queryContainerPage(){
+var spaceName=s;
+var parentName=pr;
+var pageName=pg;
+var apiFileName=fn;
+
+var queryContainerPage = function(){
    debug("Container Page"+parentName);
    debug("Proxy"+proxy);
     return new Promise(function(resolve,reject){
@@ -45,7 +50,7 @@ function queryContainerPage(){
     });
 };
 
- function getAPIPage(){
+var getAPIPage= function (){
    debug("Get API Page:");
    return new Promise(function(resolve,reject){
      http.get({
@@ -53,7 +58,7 @@ function queryContainerPage(){
        proxy: proxy
      }, function(err,resp,body){
        if(err==null && resp.statusCode!=404){
-          debug("Found API Page:");          
+          debug("Found API Page:");
            var pageId = pageName;
            resolve(pageId);
        }else {
@@ -64,12 +69,12 @@ function queryContainerPage(){
    });
  };
 
-function queryAPIPage(pageId){
+var queryAPIPage = function(pageId,pageName){
     return new Promise(function(resolve,reject){
       if(pageId!=null){
         resolve(pageId);
       }else {
-        debug("Finding API Page");
+        debug("Finding API Page by title:"+ pageName);
       http.get({
         //url: confluenceurl+"/rest/api/content?title="+pageName,
         url: confluenceurl+"/rest/api/content?title="+pageName,
@@ -93,11 +98,35 @@ function queryAPIPage(pageId){
 
 };
 
-function createPage(pageId){
+
+var getPageVersion =function (pageId){
+    return new Promise(function(resolve,reject){
+
+      var url = confluenceurl+"/rest/api/content/"+pageId+"?expand=version";
+      debug("Get Page Version:"+pageId);
+      debug("Confluence Url:"+ url);
+      debug("Proxy"+ proxy);
+      http.get({
+        url: url,
+        proxy: proxy
+      }, function(err,resp,body){
+        if(err==null){
+            var b = JSON.parse(body);
+            var version  = b.version.number;
+            resolve(version);
+        }else {
+          resolve(null);
+        }
+    });
+  });
+};
+
+var createPage = function(spaceName,containerPageId,pageId,pageName){
   return new Promise(function(resolve,reject){
     if(pageId!=null)
       resolve(pageId);
     else {
+      debug("Creating Page");
       var page = {
          "type":"page",
          "title":pageName,
@@ -136,7 +165,47 @@ function createPage(pageId){
   })
 }
 
-function queryAttachment(pageId){
+var updatePage = function(spaceName,pageName,pageId,pageVersion,content){
+  return new Promise(function(resolve,reject){
+    debug("Updating Page+"+ pageId)
+      var page = {
+        "type":"page",
+        "title":pageName,
+        "version" : {
+          "number": pageVersion+1
+        },
+        "body":{
+            "storage":{
+               "value": content,
+               "representation":"storage"
+            }
+         }
+      };
+
+      http.put({
+          url: confluenceurl+"/rest/api/content/"+ pageId,
+          proxy: proxy,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Atlassian-Token": "nocheck",
+          },
+          body: JSON.stringify(page)
+      },function(err,resp,body){
+        if(err!=null)
+          reject();
+        else{
+          console.log(body);
+          var pid = JSON.parse(body).id;
+          debug("Created Page:"+ pid);
+          resolve(pid);
+        }
+      });
+
+
+  })
+}
+
+var queryAttachment = function(pageId){
   debug("Finding attachments of page:"+ pageId);
   return new Promise(function(resolve,reject){
 
@@ -166,8 +235,9 @@ function queryAttachment(pageId){
 };
 
 
-function createAttachment(data){
+var createAttachment = function(data){
     return new Promise(function(resolve,reject){
+      debug("createAttach");
       if(data.attachmentId!=null){
         debug("No need to create attachment already on page:"+data.attachmentId);
         resolve(data);
@@ -195,7 +265,7 @@ function createAttachment(data){
     });
 };
 
-function updateAttachment(data){
+var updateAttachment = function(data){
     return new Promise(function(resolve,reject){
       if(data.attachmentId==null){
         debug("No update as attachment just created:");
@@ -225,30 +295,73 @@ function updateAttachment(data){
       }
     });
 };
+  return {
+     queryContainerPage: queryContainerPage,
+     getAPIPage: getAPIPage,
+     queryAPIPage: queryAPIPage,
+     getPageVersion: getPageVersion,
+     createPage: createPage,
+     updatePage: updatePage,
+     queryAttachment: queryAttachment,
+     createAttachment: createAttachment,
+     updateAttachment: updateAttachment
+  }
+
+}
+
+function getPageContent(pageId){
+    return new Promise(function(resolve,reject){
+      var url = confluenceurl+"/rest/api/content/"+pageId+"?expand=body.storage";
+      debug("Get Page:"+pageId);
+      debug("Confluence:"+ url);
+      debug("Proxy"+ proxy);
+      http.get({
+        url: url,
+        proxy: proxy
+      }, function(err,resp,body){
+        try{
+        if(err==null){
+            var b = JSON.parse(body);
+            var xml  = b.body.storage.value;
+            var content = striptags(xml);
+            console.log(content);
+            resolve({ title: b.title,body: content});
+        }else {
+          resolve(null);
+        }
+      }catch(exception){
+        res(exception)
+      }
+    });
+  });
+};
 
 function publish(spaceNm,parentNm,pageNm,apiFileNm) {
 
-  spaceName = spaceNm;
-  parentName = parentNm;
-  pageName = pageNm;
-  apiFileName = apiFileNm;
+  // spaceName = spaceNm;
+  // parentName = parentNm;
+  // pageName = pageNm;
+  // apiFileName = apiFileNm;
 
-  debug('Publishing')
+  var c = context(spaceNm,parentNm,pageNm,apiFileNm)
+
+  debug('Publishing:'+apiFileNm)
 
   var containerPageId = null;
 
   var baseName = path.basename(apiFileName);
+  debug('basename:'+baseName)
 
     if(baseName.indexOf('---')>0){
       debug("Page Name derived as:"+pageName);
     }
 
-    queryContainerPage()
-      .then(queryAPIPage)
-      .then(createPage)
-      .then(queryAttachment)
-      .then(createAttachment)
-      .then(updateAttachment)
+    c.queryContainerPage()
+      .then(c.queryAPIPage)
+      .then(c.createPage)
+      .then(c.queryAttachment)
+      .then(c.createAttachment)
+      .then(c.updateAttachment)
       .then(function(pageId){
         debug("Attached To Page");
       });
@@ -256,23 +369,59 @@ function publish(spaceNm,parentNm,pageNm,apiFileNm) {
 
 function sync(apiFileNm,cb) {
   debug("Sync");
-  apiFileName = apiFileNm;
-  var baseName = path.basename(apiFileName);
+  //apiFileName = apiFileNm;
+  var baseName = path.basename(apiFileNm);
   pageName = baseName.substring(0,baseName.indexOf('---'));
 
-
-  getAPIPage()
-    .then(queryAPIPage)
-    .then(queryAttachment)
-    .then(createAttachment)
-    .then(updateAttachment)
+  var c = context(null,null,pageName,apiFileNm)
+  c.getAPIPage()
+    .then(c.queryAPIPage)
+    .then(c.queryAttachment)
+    .then(c.createAttachment)
+    .then(c.updateAttachment)
     .then(function(pageId){
       debug("Attached To Page");
-      cb();
+      if(cb)
+        cb();
+    });
+}
+
+function get(pageId) {
+  debug('Get Page:'+ pageId);
+  var c = context();
+  c.getPageVersion(pageId)
+    .then(function(body){
+        console.log(body);
+    });
+}
+
+function syncContent(spaceNm,containerPgId,pgId,pageNm,theContent,cb) {
+  debug("SyncContent");
+
+  var c = context()
+
+  var spaceName = spaceNm;
+  var pageName = pageNm;
+  var containerPageId = containerPgId;
+  var pageId = pgId;
+  var content = theContent;
+  var pageVersion = 0;
+
+  c.createPage(spaceName,containerPageId,pageId,pageName)
+    .then(function(pgId){ pageId=pgId })
+    .then(function(){return c.getPageVersion(pageId)})
+    .then(function(pgVersion){pageVersion=pgVersion})
+    .then(function(){return c.updatePage(spaceName,pageName,pageId,pageVersion,content)})
+    .then(function(pageId){
+      debug("Content Updated");
+      cb(pageId);
     });
 }
 
 module.exports = {
   sync: sync,
-  publish: publish
+  publish: publish,
+  get: get,
+  syncContent: syncContent,
+  getPageContent: getPageContent
 }

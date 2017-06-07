@@ -151,8 +151,9 @@ var createPage = function(spaceName,containerPageId,pageId,pageName){
           },
           body: JSON.stringify(page)
       },function(err,resp,body){
-        if(err!=null)
+        if(err!=null){
           reject();
+        }
         else{
           console.log(body);
           var pid = JSON.parse(body).id;

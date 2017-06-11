@@ -6,6 +6,8 @@ var Promise = require("bluebird");
 var http = require('request');
 var fs = require('fs');
 
+var _ = require("underscore");
+
 var xml2js = require("xml2js");
 var striptags = require('striptags');
 
@@ -14,7 +16,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 confluenceurl = process.env.CONFLUENCEURL;
 //"http://"+username+":"+password+"@confluence.com;
 
-console.log(process.env.PROXYURL);
+//console.log(process.env.PROXYURL);
 proxy = process.env.PROXYURL;
 //proxy = "http://"+username+":"+password+"@"+proxyHost+":"+proxyPort;
 
@@ -111,9 +113,14 @@ var getPageVersion =function (pageId){
         proxy: proxy
       }, function(err,resp,body){
         if(err==null){
-            var b = JSON.parse(body);
-            var version  = b.version.number;
-            resolve(version);
+            try {
+              var b = JSON.parse(body);
+              var version  = b.version.number;
+              resolve(version);
+            }catch(ex){
+              console.log("######################"+pageId);
+              resolve(null)
+            }
         }else {
           resolve(null);
         }
@@ -155,7 +162,7 @@ var createPage = function(spaceName,containerPageId,pageId,pageName){
           reject();
         }
         else{
-          console.log(body);
+          //console.log(body);
           var pid = JSON.parse(body).id;
           debug("Created Page:"+ pid);
           resolve(pid);
@@ -165,6 +172,8 @@ var createPage = function(spaceName,containerPageId,pageId,pageName){
 
   })
 }
+
+
 
 var updatePage = function(spaceName,pageName,pageId,pageVersion,content){
   return new Promise(function(resolve,reject){
@@ -195,10 +204,15 @@ var updatePage = function(spaceName,pageName,pageId,pageVersion,content){
         if(err!=null)
           reject();
         else{
-          console.log(body);
-          var pid = JSON.parse(body).id;
-          debug("Created Page:"+ pid);
-          resolve(pid);
+          //console.log(body);
+          try {
+            var pid = JSON.parse(body).id;
+            debug("Created Page:"+ pid);
+            resolve(pid);
+          }catch(ex){
+            console.log("#############"+pageId);
+            resolve(null)
+          }
         }
       });
 
@@ -310,6 +324,26 @@ var updateAttachment = function(data){
 
 }
 
+
+function deletePage(pageId){
+    return new Promise(function(resolve,reject){
+      var url = confluenceurl+"/rest/api/content/"+pageId;
+      debug("Delete Page:"+pageId);
+      debug("Confluence:"+ url);
+      debug("Proxy"+ proxy);
+      http.delete({
+        url: url,
+        proxy: proxy
+      }, function(err,resp,body){
+        if(!err){
+          resolve(null);
+        } else {
+          rej();
+        }
+    });
+  });
+};
+
 function getPageContent(pageId){
     return new Promise(function(resolve,reject){
       var url = confluenceurl+"/rest/api/content/"+pageId+"?expand=body.storage";
@@ -324,8 +358,9 @@ function getPageContent(pageId){
         if(err==null){
             var b = JSON.parse(body);
             var xml  = b.body.storage.value;
+            console.log(xml);
             var content = striptags(xml);
-            console.log(content);
+
             resolve({ title: b.title,body: content});
         }else {
           resolve(null);
@@ -336,6 +371,143 @@ function getPageContent(pageId){
     });
   });
 };
+
+
+function getPageLabels(pageId){
+    return new Promise(function(resolve,reject){
+      var url = confluenceurl+"/rest/api/content/"+pageId+"/label?expand=body.storage";
+      debug("Get Page:"+pageId);
+      debug("Confluence:"+ url);
+      debug("Proxy"+ proxy);
+      http.get({
+        url: url,
+        proxy: proxy
+      }, function(err,resp,body){
+        try{
+        if(err==null){
+            var bodyjson = JSON.parse(body);
+            var labels = _.map(bodyjson.results,function(labelrecord){
+              return labelrecord.name;
+            })
+            //console.log(labels);
+            resolve({ labels: labels});
+        }else {
+          resolve(null);
+        }
+      }catch(exception){
+        res(exception)
+      }
+    });
+  });
+};
+
+
+function updatePageLabels(pageId,labels){
+    return new Promise(function(resolve,reject){
+      var url = confluenceurl+"/rest/api/content/"+pageId+"/label";
+      debug("Set Page:"+pageId);
+      debug("Confluence:"+ url);
+      debug("Proxy"+ proxy);
+      var bd = _.map(labels,function(label){
+        return { "prefix":"global","name":label};
+      })
+      http.post({
+        url: url,
+        proxy: proxy,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Atlassian-Token": "nocheck",
+        },
+        body: JSON.stringify(bd)
+      }, function(err,resp,body){
+        try{
+        if(err==null){
+            resolve();
+        }else {
+          resolve(null);
+        }
+      }catch(exception){
+        resolve(exception)
+      }
+    });
+  });
+};
+
+
+function removePageLabels(pageId,label){
+    return new Promise(function(resolve,reject){
+      var url = confluenceurl+"/rest/api/content/"+pageId+"/label/"+label;
+      debug("Delete Label on page:"+pageId);
+      debug("Confluence:"+ url);
+      debug("Proxy"+ proxy);
+      http.delete({
+        url: url,
+        proxy: proxy
+      }, function(err,resp,body){
+        try{
+        if(err==null){
+            resolve();
+        }else {
+          resolve(null);
+        }
+      }catch(exception){
+        resolve(exception)
+      }
+    });
+  });
+};
+
+function getPageChildren(pageId){
+    return new Promise(function(resolve,reject){
+      var url = confluenceurl+"/rest/api/content/"+pageId+"/child/page?start=0&limit=200";
+      debug("Get Page:"+pageId);
+      debug("Confluence:"+ url);
+      debug("Proxy"+ proxy);
+      http.get({
+        url: url,
+        proxy: proxy
+      }, function(err,resp,body){
+        try{
+        if(err==null){
+
+            var bodyjson = JSON.parse(body);
+            //console.log(JSON.stringify(bodyjson,null," "));
+            var children = _.map(bodyjson.results,function(child){
+              return { id: child.id,title: child.title};
+            })
+            //console.log(children);
+            resolve({ id: pageId, children: children});
+        }else {
+          resolve(null);
+        }
+      }catch(exception){
+        resolve(exception)
+      }
+    });
+  });
+};
+
+function getPageDescendents(pageId){
+    return new Promise(function(resolve,reject){
+
+        getPageChildren(pageId).then(function(children){
+          if(!children.children){
+            resolve([]);
+          }else{
+            var descendants = _.map(children.children,function(child){
+              //console.log("Child"+ child.id);
+              //console.log(child);
+              return getPageDescendents(child.id).then(function(descendants){
+                  child.children = descendants.children;
+              })
+            })
+            Promise.all(descendants).then(function(){
+              resolve(children);
+            })
+          }
+        })
+    });
+}
 
 function publish(spaceNm,parentNm,pageNm,apiFileNm) {
 
@@ -424,5 +596,11 @@ module.exports = {
   publish: publish,
   get: get,
   syncContent: syncContent,
-  getPageContent: getPageContent
+  getPageContent: getPageContent,
+  getPageLabels: getPageLabels,
+  updatePageLabels: updatePageLabels,
+  removePageLabels: removePageLabels,
+  getPageChildren: getPageChildren,
+  getPageDescendents: getPageDescendents,
+  deletePage: deletePage
 }

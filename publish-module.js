@@ -201,8 +201,10 @@ var updatePage = function(spaceName,pageName,pageId,pageVersion,content){
           },
           body: JSON.stringify(page)
       },function(err,resp,body){
-        if(err!=null)
+        if(err!=null){
+           console.log(err);
           reject();
+        }
         else{
           //console.log(body);
           try {
@@ -402,35 +404,47 @@ function getPageLabels(pageId){
 };
 
 
-function updatePageLabels(pageId,labels){
-    return new Promise(function(resolve,reject){
+function updatePageLabels(name,pageId,labels){
       var url = confluenceurl+"/rest/api/content/"+pageId+"/label";
       debug("Set Page:"+pageId);
       debug("Confluence:"+ url);
       debug("Proxy"+ proxy);
-      var bd = _.map(labels,function(label){
-        return { "prefix":"global","name":label};
-      })
-      http.post({
-        url: url,
-        proxy: proxy,
-        headers: {
-          "Content-Type": "application/json",
-          "X-Atlassian-Token": "nocheck",
-        },
-        body: JSON.stringify(bd)
-      }, function(err,resp,body){
-        try{
-        if(err==null){
-            resolve();
-        }else {
-          resolve(null);
-        }
-      }catch(exception){
-        resolve(exception)
-      }
-    });
-  });
+      var n=20;//max labels to confluence
+      var lists = _.groupBy(labels, function(element, index){
+        return Math.floor(index/n);
+      });
+      lists = _.toArray(lists); //Added this to convert the returned object to an array.
+      var promises = _.map(lists,function(labelschunk){
+          var bd = _.map(labelschunk,function(label){
+            return { "prefix":"global","name":label};
+          })
+          console.log(name+":"+pageId+":"+bd.length);
+          return new Promise(function(res,rej){
+            http.post({
+              url: url,
+              proxy: proxy,
+              headers: {
+                "Content-Type": "application/json",
+                "X-Atlassian-Token": "nocheck",
+              },
+              body: JSON.stringify(bd)
+            }, function(err,resp,body){
+              try{
+              if(err==null){
+                //console.log(resp);
+                  res();
+              }else {
+                console.log(err);
+                res(null);
+              }
+            }catch(exception){
+              console.log(exception);
+              res(exception)
+            }
+          })
+        });
+      });
+      return Promise.all(promises);
 };
 
 

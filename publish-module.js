@@ -177,7 +177,8 @@ var createPage = function(spaceName,containerPageId,pageId,pageName){
 
 var updatePage = function(spaceName,pageName,pageId,pageVersion,content){
   return new Promise(function(resolve,reject){
-    debug("Updating Page+"+ pageId)
+    debug("Updating Page:"+ pageId)
+    debug("Content:"+content);
       var page = {
         "type":"page",
         "title":pageName,
@@ -206,10 +207,10 @@ var updatePage = function(spaceName,pageName,pageId,pageVersion,content){
           reject();
         }
         else{
-          //console.log(body);
+          //console.log(resp);
           try {
             var pid = JSON.parse(body).id;
-            debug("Created Page:"+ pid);
+            console.log("Page Updated:"+ pid);
             resolve(pid);
           }catch(ex){
             console.log("#############"+pageId);
@@ -360,10 +361,10 @@ function getPageContent(pageId){
         if(err==null){
             var b = JSON.parse(body);
             var xml  = b.body.storage.value;
-            console.log(xml);
-            var content = striptags(xml);
+            //console.log(xml);
+            //var content = striptags(xml);
 
-            resolve({ title: b.title,body: content});
+            resolve({ title: b.title,pageId: pageId, body: xml});
         }else {
           resolve(null);
         }
